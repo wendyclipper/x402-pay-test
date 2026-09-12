@@ -54,11 +54,11 @@ document.getElementById("pay").onclick = async () => {
 
     const challenge = await challengeResponse.json();
     const required = challenge.paymentRequired;
-    const accepted = required[0];
-    if (accepted.network !== "base")
+    const accepted = required.accepts[0];
+    if (accepted.network !== "eip155:8453")
       throw new Error("Verkeerd netwerk.");
 
-    if (accepted.maxAmountRequired !== "50000")
+    if (accepted.amount !== "50000")
       throw new Error("Prijs is niet $0.05.");
 
     const now = Math.floor(Date.now() / 1000);
