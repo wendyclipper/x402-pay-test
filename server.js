@@ -73,7 +73,7 @@ document.getElementById("pay").onclick = async () => {
     const authorization = {
       from,
       to: accepted.payTo,
-      value: accepted.amount,
+      value: accepted.maxAmountRequired,
       validAfter: String(now - 10),
       validBefore: String(now + 300),
       nonce
