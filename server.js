@@ -54,8 +54,7 @@ document.getElementById("pay").onclick = async () => {
 
     const challenge = await challengeResponse.json();
     const required = challenge.paymentRequired;
-    const accepted = required.accepts[0];
-
+    out.textContent = JSON.stringify(required, null, 2); return;
     if (accepted.network !== "eip155:8453")
       throw new Error("Verkeerd netwerk.");
 
