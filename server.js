@@ -15,7 +15,7 @@ app.get("/", (req, res) => {
 </head>
 <body style="font-family:Arial;max-width:650px;margin:60px auto;padding:20px">
   <h2>x402 Payment Test</h2>
-  <p>MetaMask → Base → USDC → €0.05 API call</p>
+  <p>MetaMask → Base → USDC → $0.05 API call</p>
 
   <button id="pay" style="font-size:18px;padding:14px 22px">
     Pay $0.05 & Run
@@ -32,13 +32,16 @@ function b64(obj) {
 
 document.getElementById("pay").onclick = async () => {
   try {
-    if (!window.ethereum) throw new Error("MetaMask niet gevonden.");
+    if (!window.ethereum) {
+      throw new Error("MetaMask niet gevonden.");
+    }
 
     out.textContent = "MetaMask verbinden...";
 
     const accounts = await ethereum.request({
       method: "eth_requestAccounts"
     });
+
     const from = accounts[0];
 
     await ethereum.request({
@@ -46,24 +49,46 @@ document.getElementById("pay").onclick = async () => {
       params: [{ chainId: "0x2105" }]
     });
 
-    out.textContent = "Betaalgegevens ophalen...";
+    out.textContent = "x402 betaalgegevens ophalen...";
 
     const challengeResponse = await fetch("/challenge", {
       method: "POST"
     });
 
     const challenge = await challengeResponse.json();
+
+    if (!challengeResponse.ok) {
+      throw new Error(
+        challenge.error || "Kon betaalgegevens niet ophalen."
+      );
+    }
+
     const required = challenge.paymentRequired;
     const accepted = required.accepts[0];
-    if (accepted.network !== "eip155:8453")
-      throw new Error("Verkeerd netwerk.");
 
-    if (accepted.amount !== "50000")
-      throw new Error("Prijs is niet $0.05.");
+    if (required.x402Version !== 2) {
+      throw new Error("Geen x402 V2 response.");
+    }
+
+    if (accepted.network !== "eip155:8453") {
+      throw new Error("Verkeerd netwerk.");
+    }
+
+    if (accepted.amount !== "50000") {
+      throw new Error(
+        "Onverwachte prijs: " + accepted.amount
+      );
+    }
 
     const now = Math.floor(Date.now() / 1000);
+    const timeout = Math.min(
+      Number(accepted.maxTimeoutSeconds || 60),
+      60
+    );
+
     const nonceBytes = new Uint8Array(32);
     crypto.getRandomValues(nonceBytes);
+
     const nonce =
       "0x" +
       [...nonceBytes]
@@ -73,9 +98,9 @@ document.getElementById("pay").onclick = async () => {
     const authorization = {
       from,
       to: accepted.payTo,
-      value: accepted.maxAmountRequired,
-      validAfter: String(now - 10),
-      validBefore: String(now + 300),
+      value: accepted.amount,
+      validAfter: String(now - 5),
+      validBefore: String(now + timeout),
       nonce
     };
 
@@ -98,8 +123,8 @@ document.getElementById("pay").onclick = async () => {
       },
       primaryType: "TransferWithAuthorization",
       domain: {
-        name: accepted.extra.name,
-        version: accepted.extra.version,
+        name: accepted.extra?.name || "USD Coin",
+        version: accepted.extra?.version || "2",
         chainId: 8453,
         verifyingContract: accepted.asset
       },
@@ -107,7 +132,7 @@ document.getElementById("pay").onclick = async () => {
     };
 
     out.textContent =
-      "MetaMask opent nu. Controleer de betaling en onderteken.";
+      "MetaMask opent. Controleer goed: $0.05 USDC naar jouw ontvangwallet.";
 
     const signature = await ethereum.request({
       method: "eth_signTypedData_v4",
@@ -121,14 +146,17 @@ document.getElementById("pay").onclick = async () => {
       payload: {
         signature,
         authorization
-      }
+      },
+      extensions: required.extensions || {}
     };
 
-    out.textContent = "Betaling uitvoeren...";
+    out.textContent = "Betaling wordt uitgevoerd...";
 
     const result = await fetch("/pay", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         paymentSignature: b64(paymentPayload)
       })
@@ -154,7 +182,13 @@ document.getElementById("pay").onclick = async () => {
 
 app.post("/challenge", async (req, res) => {
   try {
-    const r = await fetch(TARGET, { method: "POST" });
+    const r = await fetch(TARGET, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({})
+    });
 
     const header = r.headers.get("payment-required");
 
@@ -167,11 +201,16 @@ app.post("/challenge", async (req, res) => {
     }
 
     const paymentRequired =
-      JSON.parse(Buffer.from(header, "base64").toString("utf8"));
+      JSON.parse(
+        Buffer.from(header, "base64").toString("utf8")
+      );
 
     res.json({ paymentRequired });
+
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({
+      error: e.message
+    });
   }
 });
 
@@ -193,12 +232,16 @@ app.post("/pay", async (req, res) => {
       body: await r.text(),
       paymentResponse: r.headers.get("payment-response")
     });
+
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    res.status(500).json({
+      error: e.message
+    });
   }
 });
 
 const port = process.env.PORT || 3000;
+
 app.listen(port, "0.0.0.0", () => {
-  console.log("x402 payment test running");
+  console.log("x402 payment test running on port " + port);
 });
