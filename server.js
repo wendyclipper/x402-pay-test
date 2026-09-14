@@ -227,11 +227,16 @@ app.post("/pay", async (req, res) => {
       })
     });
 
-    res.json({
-      status: r.status,
-      body: await r.text(),
-      paymentResponse: r.headers.get("payment-response")
-    });
+    const body = await r.text();
+
+res.json({
+  status: r.status,
+  body,
+  paymentResponse: r.headers.get("payment-response"),
+  paymentRequired: r.headers.get("payment-required"),
+  xPaymentError: r.headers.get("x-payment-error"),
+  allHeaders: Object.fromEntries(r.headers.entries())
+});
 
   } catch (e) {
     res.status(500).json({
